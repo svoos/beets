@@ -386,18 +386,12 @@ class LastGenrePlugin(plugins.BeetsPlugin):
     def _tags_for(self, obj, min_weight=None):
         """Core genre identification routine.
 
-        Given a pylast entity (album or track), return a list of
+        Given a pylast entity (album or track), returns a list of
         tag names for that entity. Return an empty list if the entity is
         not found or another error occurs.
 
         If `min_weight` is specified, tags are filtered by weight.
         """
-        # Work around an inconsistency in pylast where
-        # Album.get_top_tags() does not return TopItem instances.
-        # https://code.google.com/p/pylast/issues/detail?id=85
-        if isinstance(obj, pylast.Album):
-            obj = super(pylast.Album, obj)
-
         try:
             res = obj.get_top_tags()
         except PYLAST_EXCEPTIONS as exc:
