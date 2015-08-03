@@ -175,12 +175,13 @@ class LastGenrePlugin(plugins.BeetsPlugin):
                 else:
                     parents = [find_parents(tag, self.c14n_branches)[-1]]
 
-                tags_all += parents
+                if len(parents) > 0:
+                    tags_all += parents
+                    tags_all = deduplicate(tags_all)
+
                 if len(tags_all) >= count:
                     break
             tags = tags_all
-
-        tags = deduplicate(tags)
 
         # c14n only adds allowed genres but we may have had forbidden genres in
         # the original tags list
