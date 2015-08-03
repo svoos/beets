@@ -221,19 +221,14 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         if any(not s for s in args):
             return None
 
-        key = u'{0}.{1}'.format(entity, u'-'.join(unicode(a) for a in args))
+        key = (entity, u'-'.join(unicode(a) for a in args))
         if key in self._genre_cache:
             return self._genre_cache[key]
-        else:
-            args_replaced = []
-            for arg in args:
-                for k, v in REPLACE.items():
-                    arg = arg.replace(k, v)
-                args_replaced.append(arg)
 
-            genre = self.fetch_genre(method(*args_replaced))
-            self._genre_cache[key] = genre
-            return genre
+        args_replaced = [arg.replace(k, v) for arg in args for (k, v) in REPLACE.items()]
+        genre = self.fetch_genre(method(*args_replaced))
+        self._genre_cache[key] = genre
+        return genre
 
     def fetch_album_genre(self, obj):
         """Return the album genre for this Item or Album.
