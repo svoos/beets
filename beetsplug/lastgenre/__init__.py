@@ -27,6 +27,7 @@ import pylast
 import os
 import yaml
 import traceback
+import time
 
 from beets import plugins
 from beets import ui
@@ -107,6 +108,7 @@ class LastGenrePlugin(plugins.BeetsPlugin):
             'force': True,
             'auto': True,
             'separator': u', ',
+            'report': False,
         })
 
         self.setup()
@@ -118,6 +120,12 @@ class LastGenrePlugin(plugins.BeetsPlugin):
             self.import_stages = [self.imported]
 
         self._genre_cache = {}
+        self._tag_report = {
+            'timestamp': time.strftime('%Y-%m-%d - %H:%M:%S'),
+            'accepted': {},
+            'rejected': {},
+            'replaced': {},
+            }
 
         # Read the whitelist file if enabled.
         self.whitelist = set()
@@ -155,13 +163,29 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         elif source == 'artist':
             return 'artist',
 
+    def _add_to_report(self, action, tag, used_tags=None):
+        try:
+            self._tag_report[action][tag]['count'] += 1
+        except KeyError:
+            self._tag_report[action][tag] = {'count': 1, 'genres': set()}
+        if used_tags:
+            self._tag_report[action][tag]['genres'].update(used_tags)
+    
+    def _items_from_report(self, action):
+        """ Returns a list of 3-tuples (tag, count, genre_list),
+            sorted by count in descending order.
+        """
+        result = [(tag, values['count'], [g for g in values['genres']])
+                    for tag, values in self._tag_report[action].items()]
+        return sorted(result, key=lambda tag_entry: tag_entry[1], reverse=True)
+    
     def _resolve_genres(self, tags):
         """Given a list of strings, return a genre by joining them into a
         single string and (optionally) canonicalizing each.
         """
         if not tags:
             return None
-
+        
         count = self.config['count'].get(int)
         if self.c14n_branches:
             # Extend the list to consider tags parents in the c14n tree
@@ -175,10 +199,17 @@ class LastGenrePlugin(plugins.BeetsPlugin):
                 else:
                     parents = [find_parents(tag, self.c14n_branches)[-1]]
 
-                if len(parents) > 0:
-                    tags_all += parents
-                    tags_all = deduplicate(tags_all)
+                if len(parents) == 0:                               # tag rejected
+                    self._add_to_report('rejected', tag)
+                    continue
+                
+                if tag in parents:                                  # tag accepted
+                    self._add_to_report('accepted', tag, parents)
+                else:                                               # tag replaced
+                    self._add_to_report('replaced', tag, parents)
 
+                tags_all += parents
+                tags_all = deduplicate(tags_all)
                 if len(tags_all) >= count:
                     break
             tags = tags_all
@@ -352,6 +383,21 @@ class LastGenrePlugin(plugins.BeetsPlugin):
 
                     if write:
                         item.try_write()
+
+            # Print tag report
+            if self.config['report']:
+                genres_output = lambda list: '\t\t->\t{}'.format(', '.join(list)) if list else ''
+                accepted_output = ["+ ({0})\t{1}{2}".format(count, tag, genres_output(genres)) 
+                                    for tag, count, genres in self._items_from_report('accepted')]
+                replaced_output = ["@ ({0})\t{1}{2}".format(count, tag, genres_output(genres)) 
+                                    for tag, count, genres in self._items_from_report('replaced')]
+                rejected_output = ["- ({0})\t{1}".format(count, tag) 
+                                    for tag, count, genres in self._items_from_report('rejected')]
+                self._log.info(u"\nTag report:\t\t[{0}]\n{1}\n{2}\n{3}", 
+                            self._tag_report['timestamp'],
+                            '\n'.join(accepted_output),
+                            '\n'.join(replaced_output),
+                            '\n'.join(rejected_output))
 
         lastgenre_cmd.func = lastgenre_func
         return [lastgenre_cmd]
