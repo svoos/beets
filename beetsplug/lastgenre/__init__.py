@@ -27,7 +27,9 @@ import pylast
 import os
 import yaml
 import traceback
+
 import time
+from tabulate import tabulate
 
 from beets import plugins
 from beets import ui
@@ -386,18 +388,20 @@ class LastGenrePlugin(plugins.BeetsPlugin):
 
             # Print tag report
             if self.config['report']:
-                genres_output = lambda list: '\t\t->\t{}'.format(', '.join(list)) if list else ''
-                accepted_output = ["+ ({0})\t{1}{2}".format(count, tag, genres_output(genres)) 
-                                    for tag, count, genres in self._items_from_report('accepted')]
-                replaced_output = ["@ ({0})\t{1}{2}".format(count, tag, genres_output(genres)) 
-                                    for tag, count, genres in self._items_from_report('replaced')]
-                rejected_output = ["- ({0})\t{1}".format(count, tag) 
-                                    for tag, count, genres in self._items_from_report('rejected')]
-                self._log.info(u"\nTag report:\t\t[{0}]\n{1}\n{2}\n{3}", 
-                            self._tag_report['timestamp'],
-                            '\n'.join(accepted_output),
-                            '\n'.join(replaced_output),
-                            '\n'.join(rejected_output))
+                accepted_table = tabulate([[tag, count, ', '.join(genres)]
+                                            for tag, count, genres in self._items_from_report('accepted')],
+                                        headers=["Accepted tag", "Occurence", "Used as/with genre(s)"],
+                                        tablefmt="psql")
+                replaced_table = tabulate([[tag, count, ', '.join(genres)]
+                                            for tag, count, genres in self._items_from_report('replaced')],
+                                        headers=["Replaced tag", "Occurence", "Used as/with genre(s)"],
+                                        tablefmt="psql")
+                rejected_table = tabulate([[tag, count]
+                                            for tag, count, genres in self._items_from_report('rejected')],
+                                        headers=["Rejected tag", "Occurence"],
+                                        tablefmt="psql")
+                self._log.info(u"\nTag report:\t[{0}]\n{1}\n{2}\n{3}", 
+                            self._tag_report['timestamp'], accepted_table, replaced_table, rejected_table)
 
         lastgenre_cmd.func = lastgenre_func
         return [lastgenre_cmd]
